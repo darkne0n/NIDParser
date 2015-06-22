@@ -1,6 +1,4 @@
-﻿#define NO_DUPLICATES
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -57,11 +55,13 @@ namespace NIDParser
     {
         static void Main(string[] args)
         {
-            if (args.Length < 2)
+            if (args.Length < 2 || args.Length > 3 || (args.Length == 3 && args[2] != "ND"))
             {
-                Console.WriteLine("NIDParser by hgoel0974\nUsage: NIDParser [VitaDefiler output filename] [XML NID List output file]");
+                Console.WriteLine("NIDParser by hgoel0974\nUsage: NIDParser [VitaDefiler output filename] [XML NID List output file] [options]\nOptions:\n\tND : No duplicate NIDs");
                 return;
             }
+
+            bool noDuplicates = (args.Length == 3 && args[2] == "ND");
 
             Dictionary<string, Module> modules = new Dictionary<string, Module>();
             Mode currentMode = Mode.None;
@@ -112,19 +112,28 @@ namespace NIDParser
 
                         if (currentMode == Mode.Export)
                         {
-#if NO_DUPLICATES
-                        if (!modules[currentModuleName].Exports.Contains(nidBlock))
-#endif
-                            modules[currentModuleName].Exports.Add(nidBlock);
+                            if (noDuplicates)
+                            {
+                                if (!modules[currentModuleName].Exports.Contains(nidBlock)) modules[currentModuleName].Exports.Add(nidBlock);
+                            }
+                            else
+                            {
+                                modules[currentModuleName].Exports.Add(nidBlock);
+                            }
                         }
                         else if (currentMode == Mode.Import)
                         {
-#if NO_DUPLICATES
-                        if (!modules[currentModuleName].Imports.Contains(nidBlock))
-#endif
-                            modules[currentModuleName].Imports.Add(nidBlock);
-                        }
 
+                            if (noDuplicates)
+                            {
+                                if (!modules[currentModuleName].Imports.Contains(nidBlock)) modules[currentModuleName].Imports.Add(nidBlock);
+                            }
+                            else
+                            {
+                                modules[currentModuleName].Imports.Add(nidBlock);
+                            }
+
+                        }
                     }
                 }
 
