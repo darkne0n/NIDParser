@@ -13,6 +13,7 @@ namespace NIDParser
     [Serializable]
     public struct Library
     {
+        [XmlAttribute]
         public string Name;
         public Module[] Modules;
         [XmlText]
@@ -176,7 +177,7 @@ namespace NIDParser
                     }
                 }
 
-                XmlSerializer serializer = new XmlSerializer(libraries.Values.ToArray().GetType(), new XmlRootAttribute("Modules"));
+                XmlSerializer serializer = new XmlSerializer(libraries.Values.ToArray().GetType(), new XmlRootAttribute("Libraries"));
                 using (TextWriter writer = new StreamWriter(args[1]))
                 {
                     serializer.Serialize(writer, libraries.Values.ToArray());
