@@ -70,8 +70,6 @@ namespace NIDParser
     {
         static void Main(string[] args)
         {
-            args = new string[] { "output.txt", "NIDTable.xml", "ND" };
-
             if (args.Length < 2 || args.Length > 3 || (args.Length == 3 && args[2] != "ND"))
             {
                 Console.WriteLine("NIDParser by hgoel0974\nUsage: NIDParser [VitaDefiler output filename] [XML NID List output file] [options]\nOption:\n\tND : No Duplicates");
