@@ -9,23 +9,37 @@ using System.Xml.Serialization;
 namespace NIDParser
 {
     #region Data structures
+
+    [Serializable]
+    public struct Library
+    {
+        public string Name;
+        public Module[] Modules;
+        [XmlText]
+        public string NID;
+    }
+
     [Serializable]
     public struct Module
     {
         [XmlAttribute]
         public string Name;
 
-        [XmlElement(Order = 1)]
-        public int ImportCount { get { return Imports.Count; } set { } }
+        public NIDTable Import;
+        public NIDTable Export;
 
-        [XmlArray(Order = 2)]
-        public List<NID> Imports;
+        [XmlText]
+        public string NID;
+    }
 
-        [XmlElement(Order = 3)]
-        public int ExportCount { get { return Exports.Count; } set { } }
+    [Serializable]
+    public struct NIDTable
+    {
+        [XmlAttribute]
+        public int Count { get { return NID.Count; } set { } }
 
-        [XmlArray(Order = 4)]
-        public List<NID> Exports;
+        [XmlElement]
+        public List<NID> NID;
     }
 
     [Serializable]
@@ -35,7 +49,7 @@ namespace NIDParser
         public NIDType Type;
 
         [XmlText]
-        public uint Value;
+        public string Value;
     }
 
     public enum NIDType
@@ -55,92 +69,117 @@ namespace NIDParser
     {
         static void Main(string[] args)
         {
+            args = new string[] { "output.txt", "NIDTable.xml", "ND" };
+
             if (args.Length < 2 || args.Length > 3 || (args.Length == 3 && args[2] != "ND"))
             {
-                Console.WriteLine("NIDParser by hgoel0974\nUsage: NIDParser [VitaDefiler output filename] [XML NID List output file] [options]\nOptions:\n\tND : No duplicate NIDs");
+                Console.WriteLine("NIDParser by hgoel0974\nUsage: NIDParser [VitaDefiler output filename] [XML NID List output file] [options]\nOption:\n\tND : No Duplicates");
                 return;
             }
 
             bool noDuplicates = (args.Length == 3 && args[2] == "ND");
 
+            Dictionary<string, Library> libraries = new Dictionary<string, Library>();
             Dictionary<string, Module> modules = new Dictionary<string, Module>();
             Mode currentMode = Mode.None;
 
             using (StreamReader reader = new StreamReader(args[0]))
             {
-                string currentModuleName = "";
+                string currentLibraryName = "", currentModuleName = "";
+
                 while (!reader.EndOfStream)
                 {
                     string line = reader.ReadLine();
 
-                    if (line.Contains("Module: "))
+                    if (line.Contains("[Vita]"))
                     {
-                        currentModuleName = line.Split(',')[0].Split(' ').Last();
-
-                        if (!modules.ContainsKey(currentModuleName) && currentModuleName != "")  //If this is a new module initialize all the objects inside
+                        if (line.Contains("Module:"))
                         {
-                            modules[currentModuleName] = new Module()
+                            if (currentLibraryName != "")
                             {
-                                Name = currentModuleName,
-                                Exports = new List<NID>(),
-                                Imports = new List<NID>()
-                            };
-                        }
-
-                    }
-                    else if (line.Contains("Export Num: "))
-                    {
-                        currentMode = Mode.Export;
-                    }
-                    else if (line.Contains("Import Num: "))
-                    {
-                        currentMode = Mode.Import;
-                    }
-                    else if (currentMode != Mode.None && line.Contains("NID:") && line.Contains("type:"))
-                    {
-                        line = line.Replace("[Vita] resolve.c:111 ", "");
-                        line = line.Replace("[Vita] resolve.c:247 ", "").Trim();
-
-                        uint nid = Convert.ToUInt32(line.Split(',')[0].Replace("NID: ", "").Trim(), 16);
-                        NIDType typeCode = (NIDType)Convert.ToInt32(line.Split(',')[1].Replace("type: ", "").Trim()); //Parse the typeCode
-
-                        var nidBlock = new NID()
-                        {
-                            Type = typeCode,
-                            Value = nid
-                        };
-
-                        if (currentMode == Mode.Export)
-                        {
-                            if (noDuplicates)
-                            {
-                                if (!modules[currentModuleName].Exports.Contains(nidBlock)) modules[currentModuleName].Exports.Add(nidBlock);
+                                var tmp = libraries[currentLibraryName];
+                                tmp.Modules = modules.Values.ToArray();
+                                libraries[currentLibraryName] = tmp;
+                                modules = new Dictionary<string, Module>();
                             }
-                            else
+
+                            currentLibraryName = line.Split(',')[0].Split(' ').Last().Trim();
+
+                            uint nid = 0;
+                            if (line.Split(',').Length > 1) nid = Convert.ToUInt32(line.Split(',')[1].Split(' ').Last(), 16);
+
+                            if (currentLibraryName != "" && !libraries.ContainsKey(currentLibraryName))
                             {
-                                modules[currentModuleName].Exports.Add(nidBlock);
+                                libraries[currentLibraryName] = new Library()
+                                {
+                                    Name = currentLibraryName,
+                                    NID = nid.ToString(),
+                                    Modules = null
+                                };
                             }
                         }
-                        else if (currentMode == Mode.Import)
+                        else if (line.Contains("Export Num"))
                         {
+                            currentMode = Mode.Export;
 
-                            if (noDuplicates)
+                            currentModuleName = line.Split(',')[1].Split(' ').Last();
+                            uint nid = Convert.ToUInt32(line.Split(',')[2].Split(' ').Last(), 16);
+
+                            if (!modules.ContainsKey(currentModuleName))
                             {
-                                if (!modules[currentModuleName].Imports.Contains(nidBlock)) modules[currentModuleName].Imports.Add(nidBlock);
-                            }
-                            else
-                            {
-                                modules[currentModuleName].Imports.Add(nidBlock);
+                                modules[currentModuleName] = new Module()
+                                {
+                                    NID = nid.ToString(),
+                                    Name = currentModuleName,
+                                    Export = new NIDTable() { NID = new List<NID>() },
+                                    Import = new NIDTable() { NID = new List<NID>() }
+                                };
                             }
 
+                        }
+                        else if (line.Contains("Import Num"))
+                        {
+                            currentMode = Mode.Import;
+
+                            currentModuleName = line.Split(',')[1].Split(' ').Last();
+                            uint nid = Convert.ToUInt32(line.Split(',')[2].Split(' ').Last(), 16);
+
+                            if (!modules.ContainsKey(currentModuleName))
+                            {
+                                modules[currentModuleName] = new Module()
+                                {
+                                    NID = nid.ToString(),
+                                    Name = currentModuleName,
+                                    Export = new NIDTable() { NID = new List<NID>() },
+                                    Import = new NIDTable() { NID = new List<NID>() }
+                                };
+                            }
+                        }
+                        else if (line.Contains("type:"))
+                        {
+                            uint nid = Convert.ToUInt32(line.Split(',')[0].Split(' ').Last(), 16);
+                            NIDType type = (NIDType)Convert.ToInt32(line.Split(',')[1].Split(' ').Last());
+
+                            NID curNID = new NID() { Type = type, Value = nid.ToString() };
+
+                            if (currentMode == Mode.Import)
+                            {
+                                if (noDuplicates && !modules[currentModuleName].Import.NID.Contains(curNID)) modules[currentModuleName].Import.NID.Add(curNID);
+                                else if (!noDuplicates) modules[currentModuleName].Import.NID.Add(curNID);
+                            }
+                            if (currentMode == Mode.Export)
+                            {
+                                if (noDuplicates && !modules[currentModuleName].Export.NID.Contains(curNID)) modules[currentModuleName].Export.NID.Add(curNID);
+                                else if (!noDuplicates) modules[currentModuleName].Export.NID.Add(curNID);
+                            }
                         }
                     }
                 }
 
-                XmlSerializer serializer = new XmlSerializer(modules.Values.ToArray().GetType(), new XmlRootAttribute("Modules"));
+                XmlSerializer serializer = new XmlSerializer(libraries.Values.ToArray().GetType(), new XmlRootAttribute("Modules"));
                 using (TextWriter writer = new StreamWriter(args[1]))
                 {
-                    serializer.Serialize(writer, modules.Values.ToArray());
+                    serializer.Serialize(writer, libraries.Values.ToArray());
                 }
             }
         }
